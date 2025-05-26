@@ -8,8 +8,11 @@ export default defineConfig([
     plugins: { js },
     extends: ["js/recommended"],
     languageOptions: {
-      sourceType: "module", // ← permet d’utiliser import/export
-      globals: globals.node // ← corrige le problème de require
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        ...globals.jest
+      }
     }
   }
 ]);

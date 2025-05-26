@@ -1,0 +1,8 @@
+{
+  "source": {
+    "include": ["services.js", "app.js"]
+  },
+  "opts": {
+    "destination": "./docs"
+  }
+}
