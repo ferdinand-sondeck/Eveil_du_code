@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eveil-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: eveil
+  template:
+    metadata:
+      labels:
+        app: eveil
+    spec:
+      containers:
+        - name: eveil-container
+          image: eveil-du-code:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: eveil-config
+            - secretRef:
+                name: eveil-secret
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
