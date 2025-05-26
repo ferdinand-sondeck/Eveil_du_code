@@ -3,22 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <title>CloudNinja Services</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+  <style>
+    @import url('https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css');
+  </style>
 </head>
-<body>
-  <h1>Catalogue de Services</h1>
-  <ul id="services"></ul>
+<body class="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500">
+  <div class="container mx-auto px-4 py-12">
+    <div class="text-center mb-12">
+      <h1 class="text-5xl font-bold text-white mb-4 drop-shadow-lg bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+        Catalogue de Services
+      </h1>
+      <div class="w-24 h-1 bg-gradient-to-r from-white to-yellow-300 mx-auto rounded-full"></div>
+    </div>
+    
+    <div class="max-w-4xl mx-auto">
+      <div id="services" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Les services seront ajoutés ici dynamiquement -->
+      </div>
+    </div>
+  </div>
 
   <script>
-    fetch('/api/services')
-      .then(res => res.json())
-      .then(data => {
-        const ul = document.getElementById('services');
-        data.forEach(service => {
-          const li = document.createElement('li');
-          li.textContent = service.name;
-          ul.appendChild(li);
+    // Simulation de données pour la démonstration
+    const mockServices = [
+      { name: "Cloud Storage", icon: "☁️", description: "Stockage sécurisé dans le cloud" },
+      { name: "Web Hosting", icon: "🌐", description: "Hébergement web haute performance" },
+      { name: "Database Management", icon: "🗄️", description: "Gestion de bases de données" },
+      { name: "Security Services", icon: "🔒", description: "Solutions de sécurité avancées" },
+      { name: "API Gateway", icon: "🔗", description: "Passerelle API robuste" },
+      { name: "Analytics", icon: "📊", description: "Analyse de données en temps réel" }
+    ];
+
+    // Fonction pour créer une carte de service
+    function createServiceCard(service) {
+      return `
+        <div class="bg-white bg-opacity-20 backdrop-blur-lg rounded-xl p-6 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-300 border border-white border-opacity-30">
+          <div class="text-center">
+            <div class="text-4xl mb-4">${service.icon}</div>
+            <h3 class="text-xl font-bold text-white mb-2 bg-gradient-to-r from-white to-yellow-200 bg-clip-text text-transparent">
+              ${service.name}
+            </h3>
+            <p class="text-gray-100 text-sm opacity-90">
+              ${service.description}
+            </p>
+          </div>
+          <div class="mt-4 pt-4 border-t border-white border-opacity-20">
+            <button class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+              En savoir plus
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Simulation de l'appel API
+    function loadServices() {
+      // Remplacez cette partie par votre vrai appel API
+      /*
+      fetch('/api/services')
+        .then(res => res.json())
+        .then(data => {
+          displayServices(data);
+        })
+        .catch(error => {
+          console.error('Erreur:', error);
         });
-      });
+      */
+      
+      // Pour la démonstration, on utilise les données mockées
+      setTimeout(() => {
+        displayServices(mockServices);
+      }, 500);
+    }
+
+    function displayServices(services) {
+      const servicesContainer = document.getElementById('services');
+      servicesContainer.innerHTML = services.map(service => createServiceCard(service)).join('');
+    }
+
+    // Chargement des services au démarrage
+    loadServices();
   </script>
 </body>
 </html>
