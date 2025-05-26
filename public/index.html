@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>CloudNinja Services</title>
+</head>
+<body>
+  <h1>Catalogue de Services</h1>
+  <ul id="services"></ul>
+
+  <script>
+    fetch('/api/services')
+      .then(res => res.json())
+      .then(data => {
+        const ul = document.getElementById('services');
+        data.forEach(service => {
+          const li = document.createElement('li');
+          li.textContent = service.name;
+          ul.appendChild(li);
+        });
+      });
+  </script>
+</body>
+</html>
