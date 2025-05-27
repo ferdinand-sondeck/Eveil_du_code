@@ -12,6 +12,7 @@ spec:
       labels:
         app: eveil
     spec:
+      serviceAccountName: eveil-sa # Ajouté ici
       containers:
         - name: eveil-container
           image: eveil-du-code:latest
@@ -23,6 +24,13 @@ spec:
                 name: eveil-config
             - secretRef:
                 name: eveil-secret
+          resources: # Ajouté ici
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
           livenessProbe:
             httpGet:
               path: /api/status

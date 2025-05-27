@@ -1,3 +1,6 @@
+![Tests](https://github.com/ferdinand-sondeck/Eveil_du_code/actions/workflows/test.yml/badge.svg)
+
+
 # CloudNinja App
 
 Application Node.js simple avec une API REST.
