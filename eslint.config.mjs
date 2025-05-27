@@ -4,6 +4,7 @@ import { defineConfig } from "eslint/config";
 
 export default defineConfig([
   {
+    ignores: ["docs/scripts/**"], // 👈 Ajoute cette ligne
     files: ["**/*.{js,mjs,cjs}"],
     plugins: { js },
     extends: ["js/recommended"],
@@ -11,8 +12,8 @@ export default defineConfig([
       sourceType: "module",
       globals: {
         ...globals.node,
-        ...globals.jest
-      }
-    }
+        ...globals.jest,
+      },
+    },
   }
 ]);
