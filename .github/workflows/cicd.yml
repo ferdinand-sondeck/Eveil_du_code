@@ -1,0 +1,231 @@
+name: Complete CI/CD Pipeline
+
+on:
+  push:
+    branches: [feature/workflows]
+  pull_request:
+    branches: [feature/workflows]
+
+jobs:
+  # ===== INTÉGRATION CONTINUE =====
+  lint-test-audit:
+    name: Quality & Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Clean install
+        run: rm -rf node_modules package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+
+      - name: Run unit/integration tests with coverage
+        run: npm run test
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ===== CONSTRUCTION & PUBLICATION DOCKER =====
+  docker-build-push:
+    name: Build & Push Docker Image
+    needs: lint-test-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/eveil_du_code:latest
+            ghcr.io/${{ github.repository_owner }}/eveil_du_code:${{ github.sha }}
+
+      - name: Scan image for vulnerabilities with Trivy
+        uses: aquasecurity/trivy-action@0.11.2
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/eveil_du_code:latest
+          format: table
+          severity: CRITICAL,HIGH
+
+  # ===== DÉPLOIEMENT STAGING =====
+  deploy-staging:
+    name: Deploy to Staging
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/feature/workflows'
+    environment:
+      name: staging
+      url: https://staging.eveil-du-code.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.29.0
+
+      - name: Set kubeconfig for staging
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > $HOME/.kube/config
+
+      - name: Deploy to staging with rolling update
+        run: |
+          # Mise à jour de l'image dans le déploiement
+          kubectl set image deployment/eveil-app-staging eveil-app=ghcr.io/${{ github.repository_owner }}/eveil_du_code:${{ github.sha }} -n staging
+          
+          # Attendre que le rollout soit terminé
+          kubectl rollout status deployment/eveil-app-staging -n staging --timeout=300s
+          
+          # Vérifier que les pods sont prêts
+          kubectl wait --for=condition=ready pod -l app=eveil-app -n staging --timeout=300s
+
+      - name: Run smoke tests on staging
+        run: |
+          # Tests de base pour vérifier que l'application fonctionne
+          kubectl run curl-test --image=curlimages/curl --rm -i --restart=Never -n staging -- \
+            curl -f http://eveil-app-service.staging.svc.cluster.local:3000/health || exit 1
+
+  # ===== APPROBATION MANUELLE =====
+  approval-gate:
+    name: Manual Approval for Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: approval
+    steps:
+      - name: Wait for approval
+        run: echo "Waiting for manual approval to deploy to production..."
+
+  # ===== DÉPLOIEMENT PRODUCTION =====
+  deploy-production:
+    name: Deploy to Production
+    needs: [docker-build-push, approval-gate]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://eveil-du-code.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.29.0
+
+      - name: Set kubeconfig for production
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > $HOME/.kube/config
+
+      - name: Blue-Green Deployment to Production
+        run: |
+          # Récupérer la couleur active actuelle
+          CURRENT_COLOR=$(kubectl get service eveil-app-service -n production -o jsonpath='{.spec.selector.color}' || echo "blue")
+          
+          if [ "$CURRENT_COLOR" = "blue" ]; then
+            NEW_COLOR="green"
+          else
+            NEW_COLOR="blue"
+          fi
+          
+          echo "Deploying to $NEW_COLOR environment (current: $CURRENT_COLOR)"
+          
+          # Déployer la nouvelle version sur l'environnement inactif
+          kubectl set image deployment/eveil-app-$NEW_COLOR eveil-app=ghcr.io/${{ github.repository_owner }}/eveil_du_code:${{ github.sha }} -n production
+          
+          # Attendre que le déploiement soit prêt
+          kubectl rollout status deployment/eveil-app-$NEW_COLOR -n production --timeout=600s
+          kubectl wait --for=condition=ready pod -l app=eveil-app,color=$NEW_COLOR -n production --timeout=300s
+          
+          # Tests de santé sur le nouvel environnement
+          kubectl run health-check-$NEW_COLOR --image=curlimages/curl --rm -i --restart=Never -n production -- \
+            curl -f http://eveil-app-$NEW_COLOR-service.production.svc.cluster.local:3000/health
+          
+          # Basculer le trafic vers le nouvel environnement
+          kubectl patch service eveil-app-service -n production -p '{"spec":{"selector":{"color":"'$NEW_COLOR'"}}}'
+          
+          echo "Traffic switched to $NEW_COLOR environment"
+          
+          # Attendre un peu pour s'assurer que tout fonctionne
+          sleep 30
+          
+          # Test final
+          kubectl run final-check --image=curlimages/curl --rm -i --restart=Never -n production -- \
+            curl -f http://eveil-app-service.production.svc.cluster.local:3000/health
+
+      - name: Cleanup old deployment
+        if: success()
+        run: |
+          # Récupérer l'ancienne couleur
+          CURRENT_COLOR=$(kubectl get service eveil-app-service -n production -o jsonpath='{.spec.selector.color}')
+          if [ "$CURRENT_COLOR" = "blue" ]; then
+            OLD_COLOR="green"
+          else
+            OLD_COLOR="blue"
+          fi
+          
+          echo "Scaling down $OLD_COLOR environment"
+          kubectl scale deployment eveil-app-$OLD_COLOR --replicas=0 -n production
+
+  # ===== ROLLBACK EN CAS D'ÉCHEC =====
+  rollback-production:
+    name: Rollback Production
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+
+    steps:
+      - name: Emergency Rollback
+        run: |
+          kubectl set kubeconfig for production
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > $HOME/.kube/config
+          
+          # Rollback vers la version précédente
+          kubectl rollout undo deployment/eveil-app-blue -n production
+          kubectl rollout undo deployment/eveil-app-green -n production
+          
+          echo "Emergency rollback completed"
