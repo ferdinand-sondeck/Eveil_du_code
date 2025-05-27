@@ -2,9 +2,9 @@ name: Quality & Security Checks2
 
 on:
   push:
-    branches: [main]
+    branches: [feature/workflows]
   pull_request:
-    branches: [main]
+    branches: [feature/workflows]
 
 jobs:
   test-and-security:
