@@ -1,4 +1,4 @@
-name: Quality & Security Checks
+name: Quality & Security Checks2
 
 on:
   push:
